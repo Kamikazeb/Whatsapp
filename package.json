@@ -1,0 +1,22 @@
+{
+  "name": "whatsapp-sender",
+  "version": "1.0.0",
+  "description": "Promotional WhatsApp campaign sender built on the Meta WhatsApp Cloud API",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

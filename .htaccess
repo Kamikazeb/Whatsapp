@@ -1,0 +1,24 @@
+# Protection for Apache/LiteSpeed hosting (Hostinger Business/Cloud).
+#
+# If this app's folder sits anywhere under public_html, the web server may serve
+# its files directly, bypassing Node entirely — which would publish your .env
+# (Supabase service key, WhatsApp token) and data/ (your client list) to anyone
+# who guesses the path. This blocks that.
+#
+# It does NOT affect the app: browsers only ever reach it through the Node
+# process, which serves the public/ folder itself.
+
+# Dotfiles: .env, .instance.lock, .gitignore …
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Belt and braces for the sensitive names specifically.
+<FilesMatch "(^\.env|\.env\..*|.*\.log|.*\.lock|package-lock\.json)$">
+    Require all denied
+</FilesMatch>
+
+# Server-side code and data must never be downloadable.
+RedirectMatch 404 /(data|src|scripts|supabase|node_modules)(/|$)
+
+Options -Indexes

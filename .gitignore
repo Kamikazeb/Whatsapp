@@ -1,0 +1,11 @@
+node_modules/
+data/
+uploads/
+.env
+*.log
+
+.instance.lock
+
+# upload archives — these bundle .env and data/
+*.zip
+*.tar.gz
