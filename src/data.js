@@ -8,13 +8,15 @@ import { createClient } from '@supabase/supabase-js';
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_KEY;
 
-if (!URL || !KEY) {
-  console.error('\n  Missing SUPABASE_URL or SUPABASE_SERVICE_KEY.');
-  console.error('  Copy .env.example to .env and fill them in (Supabase → Project Settings → API).\n');
-  process.exit(1);
-}
+// Don't exit here: the server needs to boot far enough to explain the problem
+// in the browser, otherwise a hosting panel just shows a bare 503.
+export const configError = !URL
+  ? 'SUPABASE_URL is not set.'
+  : !KEY
+    ? 'SUPABASE_SERVICE_KEY is not set.'
+    : null;
 
-export const sb = createClient(URL, KEY, {
+export const sb = configError ? null : createClient(URL, KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
@@ -506,6 +508,13 @@ export async function pruneSessions() {
 
 /** Fail fast at boot with a clear message rather than on the first request. */
 export async function checkConnection() {
+  if (configError) {
+    throw new Error([
+      configError,
+      'Set SUPABASE_URL and SUPABASE_SERVICE_KEY as environment variables.',
+      "Locally that is a .env file; on a host, the panel's environment section.",
+    ].join('\n  '));
+  }
   const { error } = await sb.from('app_settings').select('id').limit(1);
   if (error) {
     throw new Error(

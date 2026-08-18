@@ -14,12 +14,19 @@ import { mountAuthRoutes, requireAuth, verifyWebhookSignature, passwordIsSet } f
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// Settings must be in memory before anything reads them.
-await data.checkConnection();
-await data.loadSettings();
+// Settings must be in memory before anything reads them. If the database is
+// unreachable we still start, so the browser can show why instead of a bare 503.
+let bootError = null;
+try {
+  await data.checkConnection();
+  await data.loadSettings();
+} catch (err) {
+  bootError = err.message;
+  console.error(`\n  STARTUP FAILED\n  ${err.message}\n`);
+}
 
 // Seed configuration from .env on first run; the UI is the source of truth after.
-{
+if (!bootError) {
   const s = settings();
   const env = process.env;
   const patch = {};
@@ -37,6 +44,18 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 
 app.set('trust proxy', 1); // behind nginx / hPanel
 app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
+
+// Nothing else can work without the database, so answer every request with the
+// reason. Names of missing variables only — never their values.
+app.use((req, res, next) => {
+  if (!bootError) return next();
+  res.status(503).type('text/plain; charset=utf-8').send(
+    `WhatsApp Sender cannot start.\n\n${bootError}\n\n`
+    + 'Set these in your hosting panel\'s environment section, then restart the app:\n'
+    + '  SUPABASE_URL           https://YOUR-PROJECT.supabase.co\n'
+    + '  SUPABASE_SERVICE_KEY   the service_role key from Supabase → Settings → API\n',
+  );
+});
 
 mountAuthRoutes(app);
 app.use(requireAuth);
@@ -436,6 +455,10 @@ claimSingleInstance();
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   console.log(`\n  WhatsApp Sender running → http://localhost:${PORT}`);
+  if (bootError) {
+    console.log('  Database: UNAVAILABLE — every page will explain why.\n');
+    return;
+  }
   console.log('  Database: Supabase');
   if (!passwordIsSet()) console.log('  No password set yet — open the app and choose one.');
   console.log('');
