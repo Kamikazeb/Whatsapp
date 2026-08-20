@@ -72,9 +72,17 @@ export async function loadSettings() {
   return cache;
 }
 
+/**
+ * Apply a patch on top of what is CURRENTLY in the database, not on top of this
+ * process's cache. Writing the whole cache back meant any long-running or stale
+ * instance silently reverted settings changed elsewhere — a verify token set in
+ * the database would be overwritten the next time an old process saved anything.
+ */
 export async function saveSettings(patch) {
-  cache = { ...cache, ...patch };
-  unwrap(await sb.from('app_settings').upsert({ id: 1, data: cache }).select('id'), 'save settings');
+  const row = unwrap(await sb.from('app_settings').select('data').eq('id', 1).maybeSingle(), 'read settings');
+  const merged = { ...DEFAULT_SETTINGS, ...(row?.data || {}), ...patch };
+  unwrap(await sb.from('app_settings').upsert({ id: 1, data: merged }).select('id'), 'save settings');
+  cache = merged;
   return cache;
 }
 
