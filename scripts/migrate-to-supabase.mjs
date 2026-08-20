@@ -57,7 +57,15 @@ console.log('\nWriting to Supabase…');
 
 // ---- settings (never carry the WhatsApp token or password hash across) ----
 const { accessToken, authHash, authSalt, ...safeSettings } = db.settings || {};
-check(await sb.from('app_settings').upsert({ id: 1, data: safeSettings }).select('id'), 'settings');
+// Only fill in blanks. The database is authoritative once the app has run, so
+// re-running this must never overwrite live settings (a verify token you already
+// gave to Meta, pacing you have tuned) with stale values from the old JSON file.
+const { data: existingRow } = await sb.from('app_settings').select('data').eq('id', 1).maybeSingle();
+const existing = existingRow?.data || {};
+const merged = { ...safeSettings, ...existing };
+const kept = Object.keys(existing).filter((k) => safeSettings[k] !== undefined && safeSettings[k] !== existing[k]);
+check(await sb.from('app_settings').upsert({ id: 1, data: merged }).select('id'), 'settings');
+if (kept.length) console.log(`  kept existing values for: ${kept.join(', ')}`);
 console.log('  settings ✓  (access token and password NOT copied — set them again)');
 
 // ---- contacts ----

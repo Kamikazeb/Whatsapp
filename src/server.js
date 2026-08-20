@@ -451,10 +451,15 @@ app.post('/api/conversations/:phone/reply', wrap(async (req, res) => {
 // ----------------------------------------------------------------- webhook
 
 app.get('/webhook', wrap(async (req, res) => {
+  // Settings are cached in memory, but this handshake happens once and must not
+  // fail just because the token was changed since the app started. Re-read it.
+  await data.loadSettings();
   if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === settings().verifyToken) {
     await saveSettings({ webhookSeen: Date.now() });
+    console.log('Webhook verified by Meta.');
     return res.status(200).send(req.query['hub.challenge']);
   }
+  console.warn('Webhook verification rejected: token did not match.');
   res.sendStatus(403);
 }));
 
