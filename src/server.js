@@ -14,29 +14,39 @@ import { mountAuthRoutes, requireAuth, verifyWebhookSignature, passwordIsSet } f
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// Settings must be in memory before anything reads them. If the database is
-// unreachable we still start, so the browser can show why instead of a bare 503.
+// IMPORTANT: this file must contain no top-level `await`.
+//
+// LiteSpeed (Hostinger's Node runtime) loads the entry file with require(), and
+// require() refuses any ES module whose graph uses top-level await:
+//   ERR_REQUIRE_ASYNC_MODULE ... use import() instead
+// It fails before a single line executes, so the app never even logs. Startup
+// therefore runs inside an async function while the module itself stays sync.
 let bootError = null;
-try {
-  await data.checkConnection();
-  await data.loadSettings();
-} catch (err) {
-  bootError = err.message;
-  console.error(`\n  STARTUP FAILED\n  ${err.message}\n`);
-}
+let booted = false;
 
-// Seed configuration from .env on first run; the UI is the source of truth after.
-if (!bootError) {
-  const s = settings();
-  const env = process.env;
-  const patch = {};
-  if (!s.phoneNumberId && env.WA_PHONE_NUMBER_ID) patch.phoneNumberId = env.WA_PHONE_NUMBER_ID;
-  if (!s.wabaId && env.WA_BUSINESS_ACCOUNT_ID) patch.wabaId = env.WA_BUSINESS_ACCOUNT_ID;
-  if (!s.verifyToken) patch.verifyToken = env.WA_VERIFY_TOKEN || 'change-me';
-  if (env.WA_API_VERSION) patch.apiVersion = env.WA_API_VERSION;
-  if (!s.defaultCountryCode && env.DEFAULT_COUNTRY_CODE) patch.defaultCountryCode = env.DEFAULT_COUNTRY_CODE;
-  // WA_ACCESS_TOKEN is deliberately never stored — see getToken() in whatsapp.js.
-  if (Object.keys(patch).length) await saveSettings(patch);
+async function boot() {
+  try {
+    // Settings must be in memory before anything reads them.
+    await data.checkConnection();
+    await data.loadSettings();
+
+    // Seed configuration from .env on first run; the UI is the source of truth after.
+    const s = settings();
+    const env = process.env;
+    const patch = {};
+    if (!s.phoneNumberId && env.WA_PHONE_NUMBER_ID) patch.phoneNumberId = env.WA_PHONE_NUMBER_ID;
+    if (!s.wabaId && env.WA_BUSINESS_ACCOUNT_ID) patch.wabaId = env.WA_BUSINESS_ACCOUNT_ID;
+    if (!s.verifyToken) patch.verifyToken = env.WA_VERIFY_TOKEN || 'change-me';
+    if (env.WA_API_VERSION) patch.apiVersion = env.WA_API_VERSION;
+    if (!s.defaultCountryCode && env.DEFAULT_COUNTRY_CODE) patch.defaultCountryCode = env.DEFAULT_COUNTRY_CODE;
+    // WA_ACCESS_TOKEN is deliberately never stored — see getToken() in whatsapp.js.
+    if (Object.keys(patch).length) await saveSettings(patch);
+
+    booted = true;
+  } catch (err) {
+    bootError = err.message;
+    console.error(`\n  STARTUP FAILED\n  ${err.message}\n`);
+  }
 }
 
 const app = express();
@@ -44,18 +54,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 
 app.set('trust proxy', 1); // behind nginx / hPanel
 app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
-
-// Nothing else can work without the database, so answer every request with the
-// reason. Names of missing variables only — never their values.
-app.use((req, res, next) => {
-  if (!bootError) return next();
-  res.status(503).type('text/plain; charset=utf-8').send(
-    `WhatsApp Sender cannot start.\n\n${bootError}\n\n`
-    + 'Set these in your hosting panel\'s environment section, then restart the app:\n'
-    + '  SUPABASE_URL           https://YOUR-PROJECT.supabase.co\n'
-    + '  SUPABASE_SERVICE_KEY   the service_role key from Supabase → Settings → API\n',
-  );
-});
 
 /**
  * Reachable without a session and before anything else, so a 503 can be told
@@ -70,6 +68,23 @@ app.get('/healthz', (req, res) => {
     uptimeSeconds: Math.round(process.uptime()),
     databaseConfigured: !data.configError,
   }, null, 2));
+});
+
+// Nothing else can work without the database, so answer every request with the
+// reason. Names of missing variables only — never their values.
+app.use((req, res, next) => {
+  if (booted) return next();
+  if (!bootError) {
+    // Requests can land in the fraction of a second before boot() resolves.
+    return res.status(503).type('text/plain; charset=utf-8')
+      .send('Starting up — reload in a moment.\n');
+  }
+  res.status(503).type('text/plain; charset=utf-8').send(
+    `WhatsApp Sender cannot start.\n\n${bootError}\n\n`
+    + 'Set these in your hosting panel\'s environment section, then restart the app:\n'
+    + '  SUPABASE_URL           https://YOUR-PROJECT.supabase.co\n'
+    + '  SUPABASE_SERVICE_KEY   the service_role key from Supabase → Settings → API\n',
+  );
 });
 
 mountAuthRoutes(app);
@@ -562,16 +577,22 @@ async function resumeInterrupted() {
 claimSingleInstance();
 
 const PORT = process.env.PORT || 3000;
+
+// Listen immediately, then finish booting in the background. The port has to be
+// open right away or LiteSpeed considers the app dead.
 const server = app.listen(PORT, () => {
   console.log(`\n  WhatsApp Sender running → http://localhost:${PORT}`);
-  if (bootError) {
-    console.log('  Database: UNAVAILABLE — every page will explain why.\n');
-    return;
-  }
-  console.log('  Database: Supabase');
-  if (!passwordIsSet()) console.log('  No password set yet — open the app and choose one.');
-  console.log('');
-  resumeInterrupted().catch((err) => console.error(err));
+
+  boot().then(() => {
+    if (bootError) {
+      console.log('  Database: UNAVAILABLE — every page will explain why.\n');
+      return;
+    }
+    console.log('  Database: Supabase');
+    if (!passwordIsSet()) console.log('  No password set yet — open the app and choose one.');
+    console.log('');
+    resumeInterrupted().catch((err) => console.error(err));
+  });
 });
 
 server.on('error', (err) => {
