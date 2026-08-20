@@ -631,7 +631,12 @@ export async function totalUnread() {
 // ------------------------------------------------------------- dashboard
 
 /** Everything the overview screen needs, in one round of queries. */
-export async function overview() {
+/**
+ * @param {boolean} hasConversations false before 002-conversations.sql has been
+ *   run. Reply counts are skipped in that case; every other figure still works,
+ *   so a pending migration must never blank the whole dashboard.
+ */
+export async function overview(hasConversations = true) {
   const count = async (q) => { const { count: n, error } = await q; if (error) throw new Error(error.message); return n || 0; };
   const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
@@ -643,7 +648,9 @@ export async function overview() {
     count(sb.from('send_log').select('id', { count: 'exact', head: true }).gte('sent_at', dayAgo).eq('ok', true)),
     count(sb.from('send_log').select('id', { count: 'exact', head: true }).gte('sent_at', weekAgo).eq('ok', true)),
     count(sb.from('send_log').select('id', { count: 'exact', head: true }).gte('sent_at', weekAgo).eq('ok', false)),
-    count(sb.from('inbox').select('id', { count: 'exact', head: true }).gte('at', weekAgo).eq('direction', 'in')),
+    hasConversations
+      ? count(sb.from('inbox').select('id', { count: 'exact', head: true }).gte('at', weekAgo).eq('direction', 'in'))
+      : Promise.resolve(null),
   ]);
 
   // Delivery funnel across every recipient ever queued.
@@ -675,7 +682,9 @@ export async function overview() {
   return {
     contacts: { total: contacts, optOuts, invalid, reachable: contacts - optOuts - invalid },
     sending: { last24h: sent24, last7d: sent7d, failed7d },
-    replies: { last7d: replies7d, unread: await totalUnread() },
+    replies: hasConversations
+      ? { last7d: replies7d, unread: await totalUnread() }
+      : { last7d: null, unread: 0 },
     funnel,
     daily: [...byDay.entries()].map(([date, n]) => ({ date, count: n })),
     recentCampaigns: campaigns.map(toCampaign),

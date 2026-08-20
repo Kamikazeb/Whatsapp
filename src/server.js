@@ -341,11 +341,11 @@ app.get('/api/inbox', wrap(async (req, res) => res.json(await data.listInbox()))
 // --------------------------------------------------------------- dashboard
 
 app.get('/api/overview', wrap(async (req, res) => {
-  if (await data.needsConversationMigration()) {
-    return res.json({ needsMigration: true, migrationFile: 'supabase/002-conversations.sql' });
-  }
-  const out = await data.overview();
-  out.needsMigration = false;
+  // A pending migration only costs you the reply figures — report everything else.
+  const needsMigration = await data.needsConversationMigration();
+  const out = await data.overview(!needsMigration);
+  out.needsMigration = needsMigration;
+  out.migrationFile = needsMigration ? 'supabase/002-conversations.sql' : null;
   // Quality rating and tier come from Meta, not from us.
   try {
     const health = await getPhoneNumberHealth();

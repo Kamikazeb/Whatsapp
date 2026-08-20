@@ -74,7 +74,11 @@ function cookieOptions(req) {
 
 // Meta must reach the webhook unauthenticated; it is verified by its own token
 // (and optionally by an HMAC signature — see verifyWebhookSignature).
-const PUBLIC_PATHS = new Set(['/login.html', '/login.js', '/styles.css', '/webhook', '/api/auth/status', '/api/auth/login', '/api/auth/setup']);
+// The sign-in page needs its own assets, or it renders unstyled with a broken logo.
+const PUBLIC_PATHS = new Set([
+  '/login.html', '/login.js', '/styles.css', '/logo.svg', '/favicon.ico',
+  '/webhook', '/api/auth/status', '/api/auth/login', '/api/auth/setup',
+]);
 
 export async function requireAuth(req, res, next) {
   try {

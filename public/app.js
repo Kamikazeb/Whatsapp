@@ -115,12 +115,12 @@ async function loadDashboard() {
     return;
   }
 
-  if (o.needsMigration) {
-    $('#dashAlerts').innerHTML = alertHtml('warning', 'One database update left',
+  // Show the notice, then carry on rendering — only the reply figures are missing.
+  $('#dashAlerts').innerHTML = o.needsMigration
+    ? alertHtml('warning', 'One database update left',
       `Run <code>${esc(o.migrationFile)}</code> in Supabase → SQL Editor to switch on Conversations and reply tracking. `
-      + 'Everything else works meanwhile.');
-    return;
-  }
+      + 'Every other figure below is live.')
+    : '';
 
   // Header pills + brand line
   if (o.number) {
@@ -168,10 +168,12 @@ async function loadDashboard() {
     ? `${o.funnel.delivered.toLocaleString()} of ${o.funnel.sent.toLocaleString()} delivered · ${o.funnel.read.toLocaleString()} read`
     : 'No messages sent yet';
 
-  $('#statReplies').textContent = o.replies.last7d.toLocaleString();
-  $('#statRepliesFoot').innerHTML = o.replies.unread
-    ? `<span class="up">${o.replies.unread} unread</span>`
-    : 'All caught up';
+  // last7d is null until 002-conversations.sql has been run.
+  const noReplies = o.replies.last7d === null;
+  $('#statReplies').textContent = noReplies ? '—' : o.replies.last7d.toLocaleString();
+  $('#statRepliesFoot').innerHTML = noReplies
+    ? 'Needs the database update above'
+    : (o.replies.unread ? `<span class="up">${o.replies.unread} unread</span>` : 'All caught up');
 
   // 14-day chart
   const max = Math.max(1, ...o.daily.map((d) => d.count));
