@@ -3,307 +3,531 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WhatsApp Campaign Sender</title>
+<title>WhatsApp Campaigns</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+<link rel="icon" href="logo.svg">
 </head>
 <body>
-<header>
-  <div class="brand"><span class="dot"></span> WhatsApp Campaign Sender</div>
-  <div class="health" id="healthBar">
-    <span class="pill" id="pillNumber">not connected</span>
-    <span class="pill" id="pillQuality">quality: —</span>
-    <span class="pill" id="pillToday">sent today: —</span>
-    <button class="ghost" id="btnLogout">sign out</button>
-  </div>
-</header>
+<div class="app">
 
-<nav class="tabs">
-  <button class="tab active" data-tab="setup">Start here</button>
-  <button class="tab" data-tab="contacts">Contacts</button>
-  <button class="tab" data-tab="send">Send</button>
-  <button class="tab" data-tab="results">Results</button>
-</nav>
-
-<main>
-
-<!-- ------------------------------------------------------------ START HERE -->
-<section id="tab-setup" class="panel active">
-
-  <div class="step" id="step1">
-    <div class="stephead"><span class="stepno">1</span><h2>Set up your app on Meta</h2><span class="status" id="st1">do this once</span></div>
-    <div class="stepbody">
-      <p class="muted">You said your Meta app and number are ready. These are the three things the app needs from it — all on one screen:
-        <b>developers.facebook.com → your app → WhatsApp → API Setup</b>.</p>
-      <ol class="checklist">
-        <li><b>Phone number ID</b> — shown under your number on that page. Not the phone number itself.</li>
-        <li><b>WhatsApp Business Account ID</b> — same page, just below.</li>
-        <li><b>A permanent token.</b> The token on that page dies after 24 hours. Make a lasting one:
-          <span class="path">business.facebook.com → Business settings → Users → System users → Add →
-          <b>Assign assets twice</b>: your app <i>and</i> your WhatsApp account, both Full control →
-          Generate new token → expiry <b>Never</b> → tick <code>whatsapp_business_messaging</code> +
-          <code>whatsapp_business_management</code></span>
-          Forgetting the WhatsApp account half is why most tokens fail.
-        </li>
-      </ol>
-      <p class="muted small">Full click-by-click walkthrough with the gotchas: <a href="SETUP.md" target="_blank">SETUP.md</a></p>
+  <!-- ============================ sidebar ============================ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <img src="logo.svg" alt="">
+      <div>
+        <div class="name">WhatsApp Campaigns</div>
+        <div class="sub" id="brandNumber">not connected</div>
+      </div>
     </div>
-  </div>
 
-  <div class="step" id="step2">
-    <div class="stephead"><span class="stepno">2</span><h2>Paste them here</h2><span class="status" id="st2">waiting</span></div>
-    <div class="stepbody">
+    <nav class="nav">
+      <div class="nav-label">Overview</div>
+      <button class="nav-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Dashboard
+      </button>
+
+      <div class="nav-label">Messaging</div>
+      <button class="nav-item" data-page="conversations">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Conversations
+        <span class="count zero" id="navUnread">0</span>
+      </button>
+      <button class="nav-item" data-page="send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        New campaign
+      </button>
+      <button class="nav-item" data-page="campaigns">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        Campaigns
+      </button>
+
+      <div class="nav-label">Audience</div>
+      <button class="nav-item" data-page="contacts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Contacts
+        <span class="count zero" id="navContacts">0</span>
+      </button>
+
+      <div class="nav-label">Configuration</div>
+      <button class="nav-item" data-page="setup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        Setup
+        <span class="count zero" id="navSetup">!</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button class="btn btn-ghost btn-block" id="btnLogout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        Sign out
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============================== main ============================== -->
+  <div class="main">
+    <header class="topbar">
       <div class="row">
-        <label>Phone number ID <input type="text" id="setPhoneNumberId" placeholder="123456789012345"></label>
-        <label>Business account ID <input type="text" id="setWabaId" placeholder="123456789012345"></label>
-        <label>Country code for local numbers <input type="text" id="setCountryCode" style="width:80px" placeholder="212"></label>
-      </div>
-      <div class="row">
-        <label style="flex:1;min-width:280px">Permanent token <input type="password" id="setAccessToken" placeholder="EAAG…"></label>
-        <button id="btnSaveSettings" class="primary">Save &amp; test connection</button>
-      </div>
-      <div id="testResult" class="result"></div>
-    </div>
-  </div>
-
-  <div class="step" id="step3">
-    <div class="stephead"><span class="stepno">3</span><h2>Create your promo template on Meta</h2><span class="status" id="st3">waiting</span></div>
-    <div class="stepbody">
-      <p class="muted">This is the part people miss. <b>To message a client who hasn't written to you in the last 24 hours,
-        WhatsApp only allows a template Meta approved in advance.</b> You write it once, Meta reviews it (usually minutes), then
-        you can send it to your whole list.</p>
-      <p class="muted"><span class="path">business.facebook.com → WhatsApp Manager → Message templates → Create template →
-        category <b>Marketing</b> → pick your language → write the text</span></p>
-      <p class="muted small">Use <code>{{1}}</code> where the client's name goes, e.g.<br>
-        <code>Bonjour {{1}}, -20% sur tout le mois d'août chez nous. Répondez STOP pour ne plus recevoir nos offres.</code><br>
-        Adding a STOP line is the single cheapest thing you can do to protect your number — it turns an angry
-        <i>Report</i> into a harmless reply this app handles for you.</p>
-      <div class="row">
-        <button id="btnLoadTemplates">Check my templates</button>
-        <span id="templateStatus" class="muted small"></span>
-      </div>
-      <div id="templateList"></div>
-    </div>
-  </div>
-
-  <div class="step" id="step4">
-    <div class="stephead"><span class="stepno">4</span><h2>Connect replies (recommended)</h2><span class="status" id="st4">optional</span></div>
-    <div class="stepbody">
-      <p class="muted">Without this the app still sends fine, but you won't see delivered/read status and STOP replies won't
-        auto-unsubscribe anyone. Meta needs a public address, so open a tunnel to this app:</p>
-      <pre class="cmd">cloudflared tunnel --url http://localhost:3000</pre>
-      <p class="muted"><span class="path">Meta app dashboard → WhatsApp → Configuration → Webhook → Edit</span><br>
-        Callback URL = the tunnel address + <code>/webhook</code> &nbsp;·&nbsp; Verify token = <code id="verifyTokenShow">—</code><br>
-        Then press <b>Manage</b> and tick the <b>messages</b> field.</p>
-      <div class="row">
-        <label>Verify token <input type="text" id="setVerifyToken" style="width:220px"></label>
-        <label style="flex:1">Opt-out keywords <input type="text" id="setOptOut"></label>
-        <button id="btnSaveWebhook">Save</button>
-      </div>
-      <div id="webhookStatus" class="muted small"></div>
-    </div>
-  </div>
-</section>
-
-<!-- -------------------------------------------------------------- CONTACTS -->
-<section id="tab-contacts" class="panel">
-  <div class="grid2">
-    <div class="card">
-      <h2>Import your client list</h2>
-      <p class="muted small">CSV or Excel. Phone and name columns are found automatically — you confirm on a preview before anything is saved.</p>
-      <input type="file" id="fileInput" accept=".csv,.xlsx,.xlsm,.txt">
-      <div class="row">
-        <label style="flex:1">Tag this batch <input type="text" id="importTag" placeholder="e.g. clients-2026"></label>
-        <button id="btnPreview" class="primary">Preview import</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Or type a few numbers</h2>
-      <p class="muted small">One per line: <code>0612345678 Ahmed</code></p>
-      <textarea id="quickAdd" rows="4" placeholder="0612345678 Ahmed&#10;+212700000000 Salma"></textarea>
-      <div class="row"><button id="btnQuickAdd">Add numbers</button><span id="quickAddResult" class="muted small"></span></div>
-    </div>
-  </div>
-
-  <div id="importPreview" class="card hidden">
-    <h2>Check this before importing</h2>
-    <div id="importCounts" class="statrow"></div>
-    <div class="row">
-      <label>Phone column <select id="phoneCol"></select></label>
-      <label>Name column <select id="nameCol"></select></label>
-      <button id="btnRemap" class="ghost">Re-read file</button>
-    </div>
-    <div class="tablewrap"><table id="previewTable"></table></div>
-    <div class="row">
-      <label>Put this batch in category
-        <input type="text" id="importTag2" placeholder="e.g. casablanca, vip, clients-2026" style="width:250px">
-      </label>
-      <button id="btnConfirmImport" class="primary">Import valid rows</button>
-      <button id="btnCancelImport" class="ghost">Cancel</button>
-    </div>
-    <p class="muted small">Separate several categories with commas. You can always add or change categories later from the contacts table.</p>
-  </div>
-
-  <div class="card">
-    <div class="cardhead">
-      <h2>Your contacts <span id="contactCount" class="badge">0</span></h2>
-      <div class="row" style="margin:0">
-        <input type="search" id="searchContacts" placeholder="search name or number">
-        <select id="filterTag"><option value="">all tags</option></select>
-        <select id="filterStatus">
-          <option value="">all</option><option value="active">active only</option>
-          <option value="optout">opted out</option><option value="invalid">invalid</option>
-        </select>
-      </div>
-    </div>
-    <div class="row bulkbar">
-      <label class="inline"><input type="checkbox" id="selectAll"> select all shown</label>
-      <span id="selCount" class="badge">0 ticked</span>
-      <button class="ghost" id="btnClearSel">Clear ticks</button>
-      <span class="pairinput">
-        <input type="text" id="bulkTag" placeholder="category name" style="width:150px">
-        <button class="ghost" data-bulk="tag">Add category</button>
-      </span>
-      <button class="ghost" data-bulk="untag">Remove it</button>
-      <button class="ghost" data-bulk="optout">Mark opted out</button>
-      <button class="ghost" data-bulk="optin">Un-opt-out</button>
-      <button class="ghost danger" data-bulk="delete">Delete</button>
-    </div>
-    <div class="tablewrap"><table id="contactsTable"></table></div>
-  </div>
-</section>
-
-<!-- ------------------------------------------------------------------ SEND -->
-<section id="tab-send" class="panel">
-
-  <div class="step">
-    <div class="stephead"><span class="stepno">1</span><h2>What to send</h2></div>
-    <div class="stepbody">
-      <div class="row">
-        <label style="flex:1;min-width:260px">Approved template
-          <select id="templateSelect"><option value="">— press “Check my templates” on Start here —</option></select>
-        </label>
-      </div>
-      <pre id="templateBody" class="preview-body muted">Pick a template to see what it says.</pre>
-      <div id="templateVars"></div>
-      <details class="adv">
-        <summary>Send plain text instead (only reaches people who wrote to you in the last 24h)</summary>
-        <p class="muted small">Not usable for a promo blast — WhatsApp blocks free text to cold contacts. Fine for follow-ups.</p>
-        <label class="inline"><input type="checkbox" id="useText"> use free text</label>
-        <div id="variants"></div>
-        <button id="btnAddVariant" class="ghost">+ add another wording</button>
-      </details>
-      <div class="row">
-        <button id="btnPreviewMsg" class="ghost">Show me a real example</button>
-        <span id="msgPreview" class="preview-inline"></span>
-      </div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="stephead"><span class="stepno">2</span><h2>Who gets it</h2></div>
-    <div class="stepbody">
-      <p class="muted small">Categories come from the tags on your contacts. Click to include — none selected means everybody.</p>
-      <div id="audTagChips" class="chips"></div>
-      <label class="inline" id="pickedWrap" style="margin:8px 0"><input type="checkbox" id="audUsePicked">
-        <span>Only the <b id="pickedCount">0</b> contacts I ticked on the Contacts tab</span></label>
-      <div class="row">
-        <label>Don't re-contact within <span class="pairinput"><input type="number" id="audCooldown" value="7" min="0" style="width:64px"> days</span></label>
-        <label>Send to at most <span class="pairinput"><input type="number" id="audLimit" placeholder="all" style="width:80px"> people</span></label>
-      </div>
-      <input type="checkbox" id="audShuffle" checked hidden>
-      <div class="bigstat"><b id="audienceCount">0</b> <small>people will receive this</small></div>
-      <div id="audienceWhy" class="muted small"></div>
-      <div id="audienceSample" class="sample"></div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="stephead"><span class="stepno">3</span><h2>How fast</h2></div>
-    <div class="stepbody">
-      <div class="presets" id="presets">
-        <label class="preset selected" data-preset="safe">
-          <input type="radio" name="preset" value="safe" checked>
-          <b>Careful</b>
-          <span>New number, or first campaigns. Slowest and safest.</span>
-        </label>
-        <label class="preset" data-preset="normal">
-          <input type="radio" name="preset" value="normal">
-          <b>Normal</b>
-          <span>Number already warmed up, quality green for a few weeks.</span>
-        </label>
-        <label class="preset" data-preset="fast">
-          <input type="radio" name="preset" value="fast">
-          <b>Fast</b>
-          <span>Established number on a high tier. Only if quality is green.</span>
-        </label>
-      </div>
-      <p class="plain" id="paceSummary"></p>
-      <details class="adv">
-        <summary>Fine-tune the numbers</summary>
-        <div class="row">
-          <label>Gap between messages (sec) <span class="pairinput"><input type="number" id="minDelaySec"> – <input type="number" id="maxDelaySec"></span></label>
-          <label>Messages per batch <input type="number" id="batchSize"></label>
-          <label>Break after each batch (min) <input type="number" id="batchPauseMin"></label>
+        <button class="btn btn-ghost btn-icon menu-toggle" id="menuToggle" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <div>
+          <h1 id="pageTitle">Dashboard</h1>
+          <div class="sub" id="pageSub">How your messaging is performing</div>
         </div>
-        <div class="row">
-          <label>Max per day <input type="number" id="dailyCap"></label>
-          <label>Max per hour <input type="number" id="hourlyCap"></label>
-          <label class="inline"><input type="checkbox" id="respectWindow" checked> only between</label>
-          <span class="pairinput"><input type="number" id="windowStart" min="0" max="23"> h – <input type="number" id="windowEnd" min="0" max="23"> h</span>
-        </div>
-      </details>
-      <label class="inline dryrun"><input type="checkbox" id="dryRun" checked>
-        <span><b>Test run</b> — write out every message without sending. Leave this on for your first campaign.</span></label>
-    </div>
-  </div>
-
-  <div class="card launch">
-    <div class="row">
-      <label style="flex:1">Name this campaign <input type="text" id="campName" placeholder="Promo août"></label>
-      <button id="btnCreateCampaign" class="primary big">Create campaign →</button>
-    </div>
-    <div id="createResult" class="muted small"></div>
-  </div>
-</section>
-
-<!-- --------------------------------------------------------------- RESULTS -->
-<section id="tab-results" class="panel">
-  <div class="card">
-    <div class="cardhead"><h2>Campaigns</h2><button id="btnRefreshCampaigns" class="ghost">refresh</button></div>
-    <div id="campaignList"></div>
-  </div>
-
-  <div id="campaignDetail" class="card hidden">
-    <div class="cardhead"><h2 id="detailTitle">Campaign</h2>
-      <div class="row" style="margin:0">
-        <select id="detailFilter">
-          <option value="">all</option><option value="pending">pending</option>
-          <option value="sent">sent</option><option value="failed">failed</option><option value="skipped">skipped</option>
-        </select>
-        <button id="btnExport" class="ghost">export CSV</button>
-        <button id="btnCloseDetail" class="ghost">close</button>
       </div>
-    </div>
-    <div class="tablewrap"><table id="detailTable"></table></div>
-  </div>
+      <div class="topbar-right">
+        <span class="badge badge-outline" id="pillQuality">quality —</span>
+        <span class="badge badge-outline" id="pillToday">0 sent today</span>
+        <button class="btn btn-outline btn-sm" id="btnRefresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+          Refresh
+        </button>
+      </div>
+    </header>
 
-  <div class="card">
-    <div class="cardhead"><h2>Replies &amp; opt-outs</h2><button id="btnRefreshInbox" class="ghost">refresh</button></div>
-    <p class="muted small">Anyone replying STOP (or another keyword from step 4) is unsubscribed automatically and skipped by every future campaign.</p>
-    <div class="tablewrap"><table id="inboxTable"></table></div>
-  </div>
-</section>
+    <div class="content">
 
-</main>
+    <!-- =========================== DASHBOARD =========================== -->
+    <section id="page-dashboard" class="page active">
+      <div id="dashAlerts"></div>
 
-<div id="modal" class="modal hidden">
-  <div class="box">
+      <div class="stat-grid">
+        <div class="stat">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            Reachable contacts
+          </div>
+          <div class="stat-value" id="statContacts">—</div>
+          <div class="stat-foot" id="statContactsFoot"></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+            Sent (24h)
+          </div>
+          <div class="stat-value" id="statSent24">—</div>
+          <div class="stat-foot" id="statSentFoot"></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            Delivery rate
+          </div>
+          <div class="stat-value" id="statDelivery">—</div>
+          <div class="stat-foot" id="statDeliveryFoot"></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Replies (7 days)
+          </div>
+          <div class="stat-value" id="statReplies">—</div>
+          <div class="stat-foot" id="statRepliesFoot"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">Messages sent</div>
+            <div class="card-desc">Last 14 days</div>
+          </div></div>
+          <div class="card-content">
+            <div class="chart" id="chartDaily"></div>
+            <div class="chart-x" id="chartDailyX"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">Delivery funnel</div>
+            <div class="card-desc">Every message ever queued</div>
+          </div></div>
+          <div class="card-content"><div class="funnel" id="funnel"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Recent campaigns</div>
+            <div class="card-desc">Latest five</div>
+          </div>
+          <button class="btn btn-outline btn-sm" data-goto="campaigns">View all</button>
+        </div>
+        <div class="card-content" id="dashCampaigns"></div>
+      </div>
+    </section>
+
+    <!-- ========================= CONVERSATIONS ========================= -->
+    <section id="page-conversations" class="page">
+      <div class="card flush">
+        <div class="convo-layout">
+          <div class="convo-list" id="convoList">
+            <div class="convo-search">
+              <input type="search" id="convoSearch" placeholder="Search conversations">
+            </div>
+            <div id="convoItems"></div>
+          </div>
+          <div class="convo-pane" id="convoPane">
+            <div class="convo-empty" id="convoEmpty">
+              <div>
+                <p><b>No conversation selected</b></p>
+                <p class="muted small" style="margin-top:6px">Replies from your clients appear here once the webhook is connected.</p>
+              </div>
+            </div>
+            <div id="convoThread" class="hidden" style="display:flex;flex-direction:column;height:100%">
+              <div class="convo-head">
+                <div class="avatar" id="convoAvatar"></div>
+                <div style="flex:1;min-width:0">
+                  <div class="who" id="convoWho"></div>
+                  <div class="meta" id="convoMeta"></div>
+                </div>
+                <button class="btn btn-outline btn-sm" id="btnConvoOptOut">Unsubscribe</button>
+              </div>
+              <div class="convo-body" id="convoBody"></div>
+              <div class="convo-foot">
+                <div class="window-note" id="windowNote"></div>
+                <div class="convo-compose">
+                  <textarea id="replyText" rows="1" placeholder="Type a reply…"></textarea>
+                  <button class="btn btn-primary" id="btnSendReply">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+                    Send
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ CONTACTS ============================ -->
+    <section id="page-contacts" class="page">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">Import your client list</div>
+            <div class="card-desc">CSV or Excel. Columns are detected automatically and you confirm before anything is saved.</div>
+          </div></div>
+          <div class="card-content">
+            <div class="field"><input type="file" id="fileInput" accept=".csv,.xlsx,.xlsm,.txt"></div>
+            <div class="form-row" style="margin-top:12px">
+              <div class="field" style="flex:1">
+                <label class="label" for="importTag">Category</label>
+                <input type="text" id="importTag" placeholder="e.g. casablanca">
+              </div>
+              <button class="btn btn-primary" id="btnPreview">Preview import</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div>
+            <div class="card-title">Add numbers by hand</div>
+            <div class="card-desc">One per line: <code>0612345678 Ahmed</code></div>
+          </div></div>
+          <div class="card-content">
+            <textarea id="quickAdd" rows="4" placeholder="0612345678 Ahmed&#10;+212700000000 Salma"></textarea>
+            <div class="row" style="margin-top:12px">
+              <button class="btn btn-secondary" id="btnQuickAdd">Add numbers</button>
+              <span class="hint" id="quickAddResult"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="importPreview" class="card hidden">
+        <div class="card-header"><div>
+          <div class="card-title">Check this before importing</div>
+          <div class="card-desc">Nothing is saved until you confirm.</div>
+        </div></div>
+        <div class="card-content">
+          <div class="stat-grid" id="importCounts" style="margin-bottom:16px"></div>
+          <div class="form-row">
+            <div class="field"><label class="label">Phone column</label><select id="phoneCol"></select></div>
+            <div class="field"><label class="label">Name column</label><select id="nameCol"></select></div>
+            <button class="btn btn-outline" id="btnRemap">Re-read file</button>
+          </div>
+          <div class="table-wrap scroll" style="margin-top:16px;border:1px solid var(--border);border-radius:var(--radius)">
+            <table id="previewTable"></table>
+          </div>
+        </div>
+        <div class="card-footer">
+          <div class="field" style="flex:1;max-width:280px">
+            <label class="label" for="importTag2">Put this batch in category</label>
+            <input type="text" id="importTag2" placeholder="e.g. casablanca, vip">
+          </div>
+          <button class="btn btn-primary" id="btnConfirmImport">Import valid rows</button>
+          <button class="btn btn-ghost" id="btnCancelImport">Cancel</button>
+        </div>
+      </div>
+
+      <div class="card flush">
+        <div class="card-header" style="padding:20px 24px 16px">
+          <div>
+            <div class="card-title">Contacts <span class="badge badge-secondary" id="contactCount">0</span></div>
+            <div class="card-desc" id="contactSub"></div>
+          </div>
+          <div class="row">
+            <input type="search" id="searchContacts" placeholder="Search name or number" style="width:220px">
+            <select id="filterTag" style="width:150px"><option value="">All categories</option></select>
+            <select id="filterStatus" style="width:140px">
+              <option value="">All</option><option value="active">Active only</option>
+              <option value="optout">Unsubscribed</option><option value="invalid">Invalid</option>
+            </select>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="selectAll"> Select all shown</label>
+          <span class="badge badge-secondary" id="selCount">0 ticked</span>
+          <button class="btn btn-ghost btn-sm" id="btnClearSel">Clear</button>
+          <span class="spacer"></span>
+          <input type="text" id="bulkTag" placeholder="Category name" style="width:160px">
+          <button class="btn btn-outline btn-sm" data-bulk="tag">Add category</button>
+          <button class="btn btn-outline btn-sm" data-bulk="untag">Remove</button>
+          <button class="btn btn-outline btn-sm" data-bulk="optout">Unsubscribe</button>
+          <button class="btn btn-outline btn-sm" data-bulk="optin">Re-subscribe</button>
+          <button class="btn btn-danger-ghost btn-sm" data-bulk="delete">Delete</button>
+        </div>
+        <div class="table-wrap scroll"><table id="contactsTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============================== SEND ============================== -->
+    <section id="page-send" class="page">
+      <div class="alert alert-info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <div class="alert-title">Templates only, for anyone who hasn't messaged you today</div>
+          WhatsApp blocks free text to contacts outside the 24-hour window. Use an approved <b>Marketing</b> template here;
+          use <b>Conversations</b> to reply freely to people who wrote to you.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head"><span class="step-no">1</span><h2>What to send</h2></div>
+        <div class="step-body">
+          <div class="field" style="max-width:460px">
+            <label class="label" for="templateSelect">Approved template</label>
+            <select id="templateSelect"><option value="">Loading templates…</option></select>
+          </div>
+          <pre id="templateBody" class="preview-body muted">Pick a template to see what it says.</pre>
+          <div id="templateVars"></div>
+          <details class="adv">
+            <summary>Send plain text instead (24-hour window only)</summary>
+            <p class="hint" style="margin:8px 0">Not usable for a cold blast — WhatsApp rejects it outside the window.</p>
+            <label class="check"><input type="checkbox" id="useText"> Use free text</label>
+            <div id="variants" style="margin-top:10px"></div>
+            <button class="btn btn-outline btn-sm" id="btnAddVariant">+ Add another wording</button>
+          </details>
+          <div class="row" style="margin-top:14px">
+            <button class="btn btn-outline" id="btnPreviewMsg">Show a real example</button>
+            <span id="msgPreview" class="preview-inline"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head"><span class="step-no">2</span><h2>Who gets it</h2></div>
+        <div class="step-body">
+          <p class="hint">Categories come from your contacts. Click to include — none selected means everybody.</p>
+          <div id="audTagChips" class="chips"></div>
+          <label class="check" style="margin:10px 0"><input type="checkbox" id="audUsePicked">
+            Only the <b id="pickedCount">0</b> contacts ticked on the Contacts page</label>
+          <div class="form-row">
+            <div class="field"><label class="label">Don't re-contact within</label>
+              <span class="inline-pair"><input type="number" id="audCooldown" value="7" min="0"> days</span></div>
+            <div class="field"><label class="label">Send to at most</label>
+              <span class="inline-pair"><input type="number" id="audLimit" placeholder="all"> people</span></div>
+          </div>
+          <input type="checkbox" id="audShuffle" checked hidden>
+          <div class="stat" style="margin-top:14px;box-shadow:none;background:var(--muted);border:none">
+            <div class="stat-value sm" id="audienceCount" style="color:var(--brand-600)">0</div>
+            <div class="stat-foot">people will receive this</div>
+            <div class="hint" id="audienceWhy" style="margin-top:6px"></div>
+            <div class="sample-names" id="audienceSample"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-head"><span class="step-no">3</span><h2>How fast</h2></div>
+        <div class="step-body">
+          <div class="preset-grid" id="presets">
+            <label class="preset selected" data-preset="safe">
+              <input type="radio" name="preset" value="safe" checked>
+              <b>Careful</b><span>New number or first campaigns. Slowest and safest.</span>
+            </label>
+            <label class="preset" data-preset="normal">
+              <input type="radio" name="preset" value="normal">
+              <b>Normal</b><span>Warmed-up number, quality green for a few weeks.</span>
+            </label>
+            <label class="preset" data-preset="fast">
+              <input type="radio" name="preset" value="fast">
+              <b>Fast</b><span>Established number on a high tier, quality green.</span>
+            </label>
+          </div>
+          <p class="summary-line" id="paceSummary"></p>
+          <details class="adv">
+            <summary>Fine-tune the numbers</summary>
+            <div class="form-grid" style="margin-top:12px">
+              <div class="field"><label class="label">Gap between messages (sec)</label>
+                <span class="inline-pair"><input type="number" id="minDelaySec"> to <input type="number" id="maxDelaySec"></span></div>
+              <div class="field"><label class="label">Messages per batch</label><input type="number" id="batchSize"></div>
+              <div class="field"><label class="label">Break after each batch (min)</label><input type="number" id="batchPauseMin"></div>
+              <div class="field"><label class="label">Max per day</label><input type="number" id="dailyCap"></div>
+              <div class="field"><label class="label">Max per hour</label><input type="number" id="hourlyCap"></div>
+              <div class="field"><label class="label">Sending hours</label>
+                <span class="inline-pair">
+                  <label class="check"><input type="checkbox" id="respectWindow" checked></label>
+                  <input type="number" id="windowStart" min="0" max="23"> to <input type="number" id="windowEnd" min="0" max="23">
+                </span></div>
+            </div>
+          </details>
+          <div class="alert alert-warning" style="margin:14px 0 0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></svg>
+            <label class="check"><input type="checkbox" id="dryRun" checked>
+              <span><b>Test run</b> — write out every message without sending. Leave this on for your first campaign.</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-content">
+          <div class="form-row">
+            <div class="field" style="flex:1"><label class="label" for="campName">Campaign name</label>
+              <input type="text" id="campName" placeholder="Promo août"></div>
+            <button class="btn btn-primary btn-lg" id="btnCreateCampaign">Create campaign</button>
+          </div>
+          <div class="hint" id="createResult" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================== CAMPAIGNS =========================== -->
+    <section id="page-campaigns" class="page">
+      <div class="card">
+        <div class="card-header">
+          <div><div class="card-title">Campaigns</div>
+            <div class="card-desc">Start, pause and monitor your sends</div></div>
+          <button class="btn btn-primary btn-sm" data-goto="send">New campaign</button>
+        </div>
+        <div class="card-content" id="campaignList"></div>
+      </div>
+
+      <div id="campaignDetail" class="card flush hidden">
+        <div class="card-header" style="padding:20px 24px 16px">
+          <div><div class="card-title" id="detailTitle">Campaign</div>
+            <div class="card-desc" id="detailSub"></div></div>
+          <div class="row">
+            <select id="detailFilter" style="width:140px">
+              <option value="">All</option><option value="pending">Pending</option>
+              <option value="sent">Sent</option><option value="failed">Failed</option><option value="skipped">Skipped</option>
+            </select>
+            <button class="btn btn-outline btn-sm" id="btnExport">Export CSV</button>
+            <button class="btn btn-ghost btn-sm" id="btnCloseDetail">Close</button>
+          </div>
+        </div>
+        <div class="table-wrap scroll"><table id="detailTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ============================= SETUP ============================= -->
+    <section id="page-setup" class="page">
+      <div class="step" id="step1">
+        <div class="step-head"><span class="step-no">1</span><h2>Set up your app on Meta</h2>
+          <span class="badge badge-outline" id="st1">do this once</span></div>
+        <div class="step-body">
+          <p class="hint">Three things from <b>developers.facebook.com → your app → WhatsApp → API Setup</b>.</p>
+          <ol class="checklist">
+            <li><b>Phone number ID</b> — shown under your number. Not the phone number itself.</li>
+            <li><b>WhatsApp Business Account ID</b> — same page, just below.</li>
+            <li><b>A permanent token.</b> The one on that page dies after 24 hours.
+              <span class="pathline">business.facebook.com → Business settings → Users → System users → Add →
+              <b>assign assets twice</b>: your app <i>and</i> your WhatsApp account, both Full control →
+              Generate new token → expiry <b>Never</b> → tick <code>whatsapp_business_messaging</code> +
+              <code>whatsapp_business_management</code></span>
+              Forgetting the WhatsApp account half is why most tokens fail.
+            </li>
+          </ol>
+          <p class="hint">Full walkthrough: <a href="SETUP.md" target="_blank">SETUP.md</a></p>
+        </div>
+      </div>
+
+      <div class="step" id="step2">
+        <div class="step-head"><span class="step-no">2</span><h2>Paste them here</h2>
+          <span class="badge badge-outline" id="st2">waiting</span></div>
+        <div class="step-body">
+          <div class="form-grid">
+            <div class="field"><label class="label">Phone number ID</label><input type="text" id="setPhoneNumberId" placeholder="123456789012345"></div>
+            <div class="field"><label class="label">Business account ID</label><input type="text" id="setWabaId" placeholder="123456789012345"></div>
+            <div class="field"><label class="label">Country code for local numbers</label><input type="text" id="setCountryCode" placeholder="212"></div>
+          </div>
+          <div class="form-row" style="margin-top:14px">
+            <div class="field" style="flex:1"><label class="label">Permanent token</label>
+              <input type="password" id="setAccessToken" placeholder="EAAG…"></div>
+            <button class="btn btn-primary" id="btnSaveSettings">Save &amp; test connection</button>
+          </div>
+          <div id="testResult" class="result"></div>
+        </div>
+      </div>
+
+      <div class="step" id="step3">
+        <div class="step-head"><span class="step-no">3</span><h2>Create your promo template</h2>
+          <span class="badge badge-outline" id="st3">waiting</span></div>
+        <div class="step-body">
+          <p class="hint">To message a client who hasn't written in 24 hours, WhatsApp only allows a template Meta
+            approved in advance. You write it once, Meta reviews it, then you can send it to your whole list.</p>
+          <span class="pathline">business.facebook.com → WhatsApp Manager → Message templates → Create template →
+            category <b>Marketing</b> → pick your language → write the text</span>
+          <p class="hint" style="margin-top:10px">Put <code>{{1}}</code> where the client's name goes:</p>
+          <pre class="preview-body">Bonjour {{1}}, -20% sur toute la collection jusqu'au 31 août chez [votre boutique].
+Répondez STOP pour ne plus recevoir nos offres.</pre>
+          <p class="hint">A STOP line is the cheapest protection there is — it turns an angry <i>Report</i>
+            into a reply this app handles for you.</p>
+          <div class="row" style="margin-top:12px">
+            <button class="btn btn-outline" id="btnLoadTemplates">Check my templates</button>
+            <span class="hint" id="templateStatus"></span>
+          </div>
+          <div id="templateList" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div class="step" id="step4">
+        <div class="step-head"><span class="step-no">4</span><h2>Connect replies</h2>
+          <span class="badge badge-outline" id="st4">optional</span></div>
+        <div class="step-body">
+          <p class="hint">Without this you get no delivery ticks, no Conversations, and STOP replies won't
+            unsubscribe anyone automatically. Meta needs a public address:</p>
+          <pre class="cmd">cloudflared tunnel --url http://localhost:3000</pre>
+          <p class="hint">On a hosted install, use your real domain instead — no tunnel needed.</p>
+          <span class="pathline">Meta app dashboard → WhatsApp → Configuration → Webhook → Edit<br>
+            Callback URL = your address + <code>/webhook</code> · Verify token = <code id="verifyTokenShow">—</code><br>
+            Then press <b>Manage</b> and tick the <b>messages</b> field.</span>
+          <div class="form-row" style="margin-top:14px">
+            <div class="field"><label class="label">Verify token</label><input type="text" id="setVerifyToken"></div>
+            <div class="field" style="flex:1"><label class="label">Opt-out keywords</label><input type="text" id="setOptOut"></div>
+            <button class="btn btn-secondary" id="btnSaveWebhook">Save</button>
+          </div>
+          <div class="hint" id="webhookStatus" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </section>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<div id="modal" class="overlay hidden">
+  <div class="dialog">
+    <h3 id="modalTitle">Are you sure?</h3>
     <p id="modalMsg"></p>
-    <div class="row" style="justify-content:flex-end">
-      <button id="modalCancel" class="ghost">Cancel</button>
-      <button id="modalOk" class="primary">Yes, delete</button>
+    <div class="dialog-actions">
+      <button class="btn btn-outline" id="modalCancel">Cancel</button>
+      <button class="btn btn-destructive" id="modalOk">Yes, delete</button>
     </div>
   </div>
 </div>

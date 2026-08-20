@@ -525,3 +525,246 @@ export async function checkConnection() {
     );
   }
 }
+
+// -------------------------------------------------- conversations (replies)
+
+const WINDOW_MS = 24 * 3600 * 1000;
+
+/** Meta only allows free text within 24h of the contact's last message. */
+export function windowOpen(lastInboundAt) {
+  return !!lastInboundAt && Date.now() - lastInboundAt < WINDOW_MS;
+}
+
+/** One row per person who has ever written to you, newest activity first. */
+export async function listConversations(limit = 100) {
+  const rows = await fetchAll(() => sb.from('inbox').select('*').order('at', { ascending: false }));
+
+  const threads = new Map();
+  for (const r of rows) {
+    const key = r.from_phone;
+    if (!threads.has(key)) {
+      threads.set(key, { phone: key, lastAt: Date.parse(r.at), lastText: r.body, lastDirection: r.direction, messages: 0, inbound: 0 });
+    }
+    const t = threads.get(key);
+    t.messages++;
+    if (r.direction === 'in') {
+      t.inbound++;
+      if (!t.lastInboundAt) t.lastInboundAt = Date.parse(r.at);
+    }
+  }
+
+  const list = [...threads.values()].sort((a, b) => b.lastAt - a.lastAt).slice(0, limit);
+  if (!list.length) return [];
+
+  // Attach the contact record so the UI can show names and opt-out state.
+  const contacts = unwrap(
+    await sb.from('contacts').select('id,phone,name,tags,opt_out,unread_count').in('phone', list.map((t) => t.phone)),
+    'conversation contacts',
+  );
+  const byPhone = new Map(contacts.map((c) => [c.phone, c]));
+
+  return list.map((t) => {
+    const c = byPhone.get(t.phone);
+    return {
+      ...t,
+      contactId: c?.id || null,
+      name: c?.name || '',
+      tags: c?.tags || [],
+      optOut: !!c?.opt_out,
+      unread: c?.unread_count || 0,
+      windowOpen: windowOpen(t.lastInboundAt),
+      windowClosesAt: t.lastInboundAt ? t.lastInboundAt + WINDOW_MS : null,
+    };
+  });
+}
+
+export async function conversationMessages(phone, limit = 200) {
+  const rows = unwrap(
+    await sb.from('inbox').select('*').eq('from_phone', phone).order('at', { ascending: true }).limit(limit),
+    'conversation messages',
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    direction: r.direction || 'in',
+    text: r.body,
+    at: Date.parse(r.at),
+    status: r.status,
+    type: r.msg_type || 'text',
+  }));
+}
+
+export async function addMessage({ phone, text, direction, messageId = null, status = null, type = 'text', optOut = false }) {
+  unwrap(await sb.from('inbox').insert({
+    from_phone: phone, body: text, direction, message_id: messageId, status, msg_type: type, opt_out: optOut,
+  }).select('id'), 'save message');
+}
+
+export async function touchInbound(phone) {
+  const now = new Date().toISOString();
+  const rows = unwrap(await sb.from('contacts').select('id,unread_count').eq('phone', phone).limit(1), 'find contact');
+  if (!rows.length) return null;
+  unwrap(await sb.from('contacts')
+    .update({ last_inbound_at: now, unread_count: (rows[0].unread_count || 0) + 1 })
+    .eq('id', rows[0].id).select('id'), 'touch inbound');
+  return rows[0].id;
+}
+
+export async function markRead(phone) {
+  unwrap(await sb.from('contacts').update({ unread_count: 0 }).eq('phone', phone).select('id'), 'mark read');
+}
+
+export async function contactByPhone(phone) {
+  const row = unwrap(await sb.from('contacts').select('*').eq('phone', phone).maybeSingle(), 'contact by phone');
+  if (!row) return null;
+  return { ...toContact(row), lastInboundAt: row.last_inbound_at ? Date.parse(row.last_inbound_at) : null, unread: row.unread_count || 0 };
+}
+
+export async function updateMessageStatus(messageId, status) {
+  await sb.from('inbox').update({ status }).eq('message_id', messageId);
+}
+
+export async function totalUnread() {
+  const rows = await fetchAll(() => sb.from('contacts').select('unread_count').gt('unread_count', 0));
+  return rows.reduce((n, r) => n + (r.unread_count || 0), 0);
+}
+
+// ------------------------------------------------------------- dashboard
+
+/** Everything the overview screen needs, in one round of queries. */
+export async function overview() {
+  const count = async (q) => { const { count: n, error } = await q; if (error) throw new Error(error.message); return n || 0; };
+  const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+
+  const [contacts, optOuts, invalid, sent24, sent7d, failed7d, replies7d] = await Promise.all([
+    count(sb.from('contacts').select('id', { count: 'exact', head: true })),
+    count(sb.from('contacts').select('id', { count: 'exact', head: true }).eq('opt_out', true)),
+    count(sb.from('contacts').select('id', { count: 'exact', head: true }).eq('invalid', true)),
+    count(sb.from('send_log').select('id', { count: 'exact', head: true }).gte('sent_at', dayAgo).eq('ok', true)),
+    count(sb.from('send_log').select('id', { count: 'exact', head: true }).gte('sent_at', weekAgo).eq('ok', true)),
+    count(sb.from('send_log').select('id', { count: 'exact', head: true }).gte('sent_at', weekAgo).eq('ok', false)),
+    count(sb.from('inbox').select('id', { count: 'exact', head: true }).gte('at', weekAgo).eq('direction', 'in')),
+  ]);
+
+  // Delivery funnel across every recipient ever queued.
+  const recips = await fetchAll(() => sb.from('recipients').select('status,delivery'));
+  const funnel = {
+    queued: recips.length,
+    sent: recips.filter((r) => r.status === 'sent').length,
+    delivered: recips.filter((r) => ['delivered', 'read'].includes(r.delivery)).length,
+    read: recips.filter((r) => r.delivery === 'read').length,
+    failed: recips.filter((r) => r.status === 'failed').length,
+    skipped: recips.filter((r) => r.status === 'skipped').length,
+  };
+
+  // Daily sends for the last 14 days, for the sparkline.
+  const log = await fetchAll(() => sb.from('send_log').select('sent_at,ok').gte('sent_at', new Date(Date.now() - 14 * 86400000).toISOString()));
+  const byDay = new Map();
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    byDay.set(d, 0);
+  }
+  for (const e of log) {
+    if (!e.ok) continue;
+    const d = e.sent_at.slice(0, 10);
+    if (byDay.has(d)) byDay.set(d, byDay.get(d) + 1);
+  }
+
+  const campaigns = unwrap(await sb.from('campaigns').select('*').order('created_at', { ascending: false }).limit(5), 'recent campaigns');
+
+  return {
+    contacts: { total: contacts, optOuts, invalid, reachable: contacts - optOuts - invalid },
+    sending: { last24h: sent24, last7d: sent7d, failed7d },
+    replies: { last7d: replies7d, unread: await totalUnread() },
+    funnel,
+    daily: [...byDay.entries()].map(([date, n]) => ({ date, count: n })),
+    recentCampaigns: campaigns.map(toCampaign),
+  };
+}
+
+// ------------------------------------------------------- schema versioning
+
+let migrationNeeded = null;
+
+/** True when supabase/002-conversations.sql has not been run yet. */
+export async function needsConversationMigration() {
+  if (migrationNeeded !== null) return migrationNeeded;
+  const { error } = await sb.from('inbox').select('direction').limit(1);
+  migrationNeeded = !!(error && /does not exist/i.test(error.message));
+  return migrationNeeded;
+}
+
+export function resetMigrationCheck() { migrationNeeded = null; }
+
+// --------------------------------------------------- cross-instance locking
+//
+// Your laptop and your server share this database. Without a lock, both would
+// happily run the same campaign and every client would get the message twice.
+
+export const STALE_MS = 3 * 60 * 1000; // a runner that misses 3 minutes is dead
+
+let lockSupported = null;
+
+async function locksAvailable() {
+  if (lockSupported !== null) return lockSupported;
+  const { error } = await sb.from('campaigns').select('runner_id').limit(1);
+  lockSupported = !(error && /does not exist/i.test(error.message));
+  return lockSupported;
+}
+
+/** Take ownership of a campaign. False means another live server has it. */
+export async function claimCampaign(id, runnerId) {
+  if (!await locksAvailable()) return true; // migration not run yet — behave as before
+  const now = new Date().toISOString();
+  const cutoff = new Date(Date.now() - STALE_MS).toISOString();
+  const claim = { runner_id: runnerId, heartbeat: now };
+
+  // Free to take?
+  let out = unwrap(await sb.from('campaigns').update(claim).eq('id', id).is('runner_id', null).select('id'), 'claim campaign');
+  if (out.length) return true;
+
+  // Previous runner died?
+  out = unwrap(await sb.from('campaigns').update(claim).eq('id', id).lt('heartbeat', cutoff).select('id'), 'reclaim campaign');
+  if (out.length) return true;
+
+  // Already ours (same process restarting the loop)?
+  out = unwrap(await sb.from('campaigns').update(claim).eq('id', id).eq('runner_id', runnerId).select('id'), 'refresh claim');
+  return out.length > 0;
+}
+
+export async function heartbeat(id, runnerId) {
+  if (!await locksAvailable()) return;
+  await sb.from('campaigns').update({ heartbeat: new Date().toISOString() }).eq('id', id).eq('runner_id', runnerId);
+}
+
+export async function releaseCampaign(id, runnerId) {
+  if (!await locksAvailable()) return;
+  await sb.from('campaigns').update({ runner_id: null, heartbeat: null }).eq('id', id).eq('runner_id', runnerId);
+}
+
+/** Who, if anyone, is actively sending this campaign. */
+export async function currentRunner(id) {
+  if (!await locksAvailable()) return null;
+  const row = unwrap(await sb.from('campaigns').select('runner_id,heartbeat').eq('id', id).maybeSingle(), 'read runner');
+  if (!row?.runner_id || !row.heartbeat) return null;
+  if (Date.parse(row.heartbeat) < Date.now() - STALE_MS) return null;
+  return row.runner_id;
+}
+
+/** Interrupted campaigns this instance may safely pick up. */
+export async function campaignsToResume() {
+  const running = await campaignsByStatus('running');
+  // Without the lock columns we cannot tell whether another server owns this
+  // campaign. Auto-resuming on a guess would double-send, so don't: a human
+  // pressing Resume is a deliberate act, an automatic restart is not.
+  if (!await locksAvailable()) {
+    if (running.length) {
+      console.warn(`  ${running.length} interrupted campaign(s) NOT auto-resumed — run supabase/003-runner-lock.sql to enable safe resume.`);
+    }
+    return [];
+  }
+  const cutoff = Date.now() - STALE_MS;
+  const rows = unwrap(await sb.from('campaigns').select('id,runner_id,heartbeat').eq('status', 'running'), 'resume scan');
+  const stale = new Set(rows.filter((r) => !r.heartbeat || Date.parse(r.heartbeat) < cutoff).map((r) => r.id));
+  return running.filter((c) => stale.has(c.id));
+}

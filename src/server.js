@@ -8,7 +8,7 @@ import * as data from './data.js';
 import { settings, saveSettings, newId } from './data.js';
 import { normalizePhone } from './phone.js';
 import { parseFile, parseCsv, mapRows } from './import.js';
-import { listTemplates, describeTemplate, getPhoneNumberHealth, getToken, tokenFromEnv } from './whatsapp.js';
+import { listTemplates, describeTemplate, getPhoneNumberHealth, getToken, tokenFromEnv, sendText, ERROR_HINTS } from './whatsapp.js';
 import { startCampaign, pauseCampaign, stopCampaign, runtimeState, buildPreview } from './sender.js';
 import { mountAuthRoutes, requireAuth, verifyWebhookSignature, passwordIsSet } from './auth.js';
 
@@ -338,6 +338,86 @@ app.post('/api/preview', wrap(async (req, res) => {
 
 app.get('/api/inbox', wrap(async (req, res) => res.json(await data.listInbox())));
 
+// --------------------------------------------------------------- dashboard
+
+app.get('/api/overview', wrap(async (req, res) => {
+  if (await data.needsConversationMigration()) {
+    return res.json({ needsMigration: true, migrationFile: 'supabase/002-conversations.sql' });
+  }
+  const out = await data.overview();
+  out.needsMigration = false;
+  // Quality rating and tier come from Meta, not from us.
+  try {
+    const health = await getPhoneNumberHealth();
+    out.number = {
+      display: health.display_phone_number,
+      name: health.verified_name,
+      quality: health.quality_rating,
+      tier: health.messaging_limit_tier,
+    };
+  } catch (err) {
+    out.number = null;
+    out.numberError = err.message;
+  }
+  res.json(out);
+}));
+
+// ----------------------------------------------------------- conversations
+
+app.get('/api/conversations', wrap(async (req, res) => {
+  if (await data.needsConversationMigration()) return res.json([]);
+  res.json(await data.listConversations());
+}));
+
+app.get('/api/conversations/:phone', wrap(async (req, res) => {
+  const phone = String(req.params.phone).replace(/\D/g, '');
+  const [messages, contact] = await Promise.all([
+    data.conversationMessages(phone),
+    data.contactByPhone(phone),
+  ]);
+  const lastInbound = messages.filter((m) => m.direction === 'in').pop();
+  res.json({
+    phone,
+    contact,
+    messages,
+    windowOpen: data.windowOpen(lastInbound?.at),
+    windowClosesAt: lastInbound ? lastInbound.at + 24 * 3600 * 1000 : null,
+  });
+}));
+
+app.post('/api/conversations/:phone/read', wrap(async (req, res) => {
+  await data.markRead(String(req.params.phone).replace(/\D/g, ''));
+  res.json({ ok: true });
+}));
+
+/**
+ * Free-text reply. Only reaches people who messaged you in the last 24 hours —
+ * outside that window Meta rejects it (error 131047) and only a template works.
+ */
+app.post('/api/conversations/:phone/reply', wrap(async (req, res) => {
+  const phone = String(req.params.phone).replace(/\D/g, '');
+  const text = String(req.body.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'Nothing to send.' });
+
+  const messages = await data.conversationMessages(phone);
+  const lastInbound = messages.filter((m) => m.direction === 'in').pop();
+  if (!data.windowOpen(lastInbound?.at)) {
+    return res.status(400).json({
+      error: 'The 24-hour reply window has closed for this contact. Only an approved template can reach them now.',
+    });
+  }
+
+  try {
+    const out = await sendText(phone, text);
+    const wamid = out?.messages?.[0]?.id || null;
+    await data.addMessage({ phone, text, direction: 'out', messageId: wamid, status: 'sent' });
+    res.json({ ok: true, messageId: wamid });
+  } catch (err) {
+    await data.addMessage({ phone, text, direction: 'out', status: 'failed' });
+    res.status(400).json({ error: err.message, code: err.code ?? null, hint: ERROR_HINTS[Number(err.code)] || null });
+  }
+}));
+
 // ----------------------------------------------------------------- webhook
 
 app.get('/webhook', wrap(async (req, res) => {
@@ -369,6 +449,10 @@ async function handleWebhook(body) {
 }
 
 async function recordStatus(st) {
+  // Replies you sent from the Conversations tab live in the message log, not
+  // in a campaign, so update both and stop at whichever matches.
+  await data.updateMessageStatus(st.id, st.status);
+
   const row = await data.recipientByMessageId(st.id);
   if (!row) return;
   const patch = { delivery: st.status };
@@ -391,7 +475,16 @@ async function recordInbound(msg) {
     await data.optOutByPhone(from);
     console.log(`OPT-OUT from ${from}: "${text}"`);
   }
-  await data.addInbound({ from, text: msg.text?.body || `[${msg.type}]`, optOut: isOptOut });
+  await data.addMessage({
+    phone: from,
+    text: msg.text?.body || msg.button?.text || `[${msg.type}]`,
+    direction: 'in',
+    messageId: msg.id || null,
+    type: msg.type || 'text',
+    optOut: isOptOut,
+  });
+  // Opens the 24-hour window in which you may reply with free text.
+  await data.touchInbound(from);
 }
 
 // -------------------------------------------------------------------------
@@ -443,7 +536,7 @@ function claimSingleInstance() {
 
 /** A campaign still marked "running" means the process died mid-send. */
 async function resumeInterrupted() {
-  const stuck = await data.campaignsByStatus('running');
+  const stuck = await data.campaignsToResume();
   for (const camp of stuck) {
     console.log(`Resuming interrupted campaign "${camp.name}".`);
     await startCampaign(camp.id).catch((err) => console.error('resume failed', err));

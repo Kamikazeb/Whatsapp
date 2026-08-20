@@ -3,30 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in · WhatsApp Campaign Sender</title>
+<title>Sign in · WhatsApp Campaigns</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+<link rel="icon" href="logo.svg">
 </head>
 <body class="centered">
   <div class="loginbox">
-    <div class="brand"><span class="dot"></span> WhatsApp Campaign Sender</div>
+    <div class="logo">
+      <img src="logo.svg" alt="">
+      <b>WhatsApp Campaigns</b>
+    </div>
 
     <div id="setupMode" class="hidden">
       <h2>Choose a password</h2>
-      <p class="muted small">This protects your client list and your WhatsApp number. Anyone who reaches this page
-        without it can send messages as you, so pick something real — at least 8 characters.</p>
-      <input type="password" id="newPassword" placeholder="new password" autocomplete="new-password">
-      <input type="password" id="newPassword2" placeholder="repeat it" autocomplete="new-password">
-      <button id="btnSetup" class="primary big">Set password &amp; continue</button>
+      <p class="hint">This protects your client list and your WhatsApp number. Anyone who reaches this page
+        without it can send messages as you — pick something real, at least 8 characters.</p>
+      <div class="field"><label class="label" for="newPassword">New password</label>
+        <input type="password" id="newPassword" autocomplete="new-password"></div>
+      <div class="field"><label class="label" for="newPassword2">Repeat it</label>
+        <input type="password" id="newPassword2" autocomplete="new-password"></div>
+      <button class="btn btn-primary btn-lg btn-block" id="btnSetup">Set password &amp; continue</button>
     </div>
 
     <div id="loginMode" class="hidden">
       <h2>Sign in</h2>
-      <input type="password" id="password" placeholder="password" autocomplete="current-password">
-      <button id="btnLogin" class="primary big">Sign in</button>
+      <p class="hint">Enter your password to continue.</p>
+      <div class="field"><label class="label" for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-lg btn-block" id="btnLogin">Sign in</button>
     </div>
 
-    <p id="envNote" class="muted small hidden"></p>
+    <p id="envNote" class="hint hidden" style="margin-top:14px"></p>
     <p id="err" class="result bad"></p>
   </div>
 <script src="login.js"></script>
