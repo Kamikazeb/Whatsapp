@@ -76,7 +76,7 @@ function cookieOptions(req) {
 // (and optionally by an HMAC signature — see verifyWebhookSignature).
 // The sign-in page needs its own assets, or it renders unstyled with a broken logo.
 const PUBLIC_PATHS = new Set([
-  '/login.html', '/login.js', '/styles.css', '/logo.svg', '/favicon.ico',
+  '/login.html', '/login.js', '/styles.css', '/logo.svg', '/favicon.ico', '/healthz',
   '/webhook', '/api/auth/status', '/api/auth/login', '/api/auth/setup',
 ]);
 

@@ -57,6 +57,21 @@ app.use((req, res, next) => {
   );
 });
 
+/**
+ * Reachable without a session and before anything else, so a 503 can be told
+ * apart from "the app is up but misconfigured". Deliberately leaks nothing:
+ * booleans and a variable name at most.
+ */
+app.get('/healthz', (req, res) => {
+  res.type('application/json').send(JSON.stringify({
+    ok: !bootError,
+    boot: bootError || 'ok',
+    node: process.version,
+    uptimeSeconds: Math.round(process.uptime()),
+    databaseConfigured: !data.configError,
+  }, null, 2));
+});
+
 mountAuthRoutes(app);
 app.use(requireAuth);
 app.use(express.static(path.join(ROOT, 'public')));
@@ -494,29 +509,30 @@ async function recordInbound(msg) {
  * Refuse to start if another one is already alive.
  */
 const LOCK_FILE = path.join(ROOT, '.instance.lock');
+const HOST_ID = process.env.HOSTNAME || process.env.COMPUTERNAME || 'unknown-host';
 
 function claimSingleInstance() {
+  // This file is only a hint. It must NEVER stop the app from booting: on shared
+  // hosting the recorded PID may belong to another tenant's process (or simply be
+  // recycled), and refusing to start would take the whole site down for a reason
+  // that is probably wrong. Double-sending is prevented properly by the per-campaign
+  // lease in Postgres (claimCampaign), which works across machines.
   try {
-    const { pid } = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
-    if (pid && pid !== process.pid) {
-      try {
-        process.kill(pid, 0); // throws if that process is gone
-        console.error(`\n  Another copy of this app is already running (process ${pid}).`);
-        console.error('  Two copies would double-send your campaigns. Stop that one first');
-        console.error(`  (Windows: taskkill /PID ${pid} /F), or delete ${LOCK_FILE} if it crashed.\n`);
-        process.exit(1);
-      } catch (err) {
-        if (err.code === 'EPERM') {
-          console.error(`\n  Another copy appears to be running (process ${pid}). Stop it first.\n`);
-          process.exit(1);
-        }
-        // stale lock from a crashed run — take it over
+    const { pid, host } = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
+    const sameHost = !host || host === HOST_ID;
+    if (pid && pid !== process.pid && sameHost) {
+      let alive = false;
+      try { process.kill(pid, 0); alive = true; } catch { alive = false; }
+      if (alive) {
+        console.warn(`\n  Another copy of this app may be running here (process ${pid}).`);
+        console.warn('  Campaigns are still safe — each one is leased in the database — but');
+        console.warn('  stop the other copy if you did not mean to run two.\n');
       }
     }
-  } catch { /* no lock file: fine */ }
+  } catch { /* no lock file, or unreadable: fine */ }
 
   try {
-    fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+    fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, host: HOST_ID, startedAt: Date.now() }));
   } catch (err) {
     // Some hosts mount the app directory read-only. Losing the lock is not worth
     // refusing to boot over — the danger it guards against is a second live copy,
