@@ -3,12 +3,17 @@
 //
 // Every recipient's outcome is written to Postgres as it happens, so a crash or
 // a deploy loses at most the message in flight.
+import { randomUUID } from 'node:crypto';
 import {
   settings, getCampaign, updateCampaign, campaignStats,
   pendingRecipients, updateRecipient, getContact, markContactSent,
-  logSend, sentSince,
+  logSend, sentSince, claimCampaign, heartbeat, releaseCampaign, currentRunner,
 } from './data.js';
+
 import { sendTemplate, sendText, classifyError, ERROR_HINTS } from './whatsapp.js';
+
+/** Identifies this process, so another server can tell it apart from itself. */
+export const RUNNER_ID = `${process.env.HOSTNAME || process.env.COMPUTERNAME || 'host'}-${process.pid}-${randomUUID().slice(0, 8)}`;
 
 /** @type {Map<string, {stop:boolean, pause:boolean, note:string, waitingUntil:number|null}>} */
 const running = new Map();
@@ -111,6 +116,12 @@ export async function startCampaign(id) {
   const camp = await getCampaign(id);
   if (!camp) return { ok: false, error: 'Campaign not found.' };
 
+  // Another server (your laptop vs the host) may already be sending this.
+  if (!await claimCampaign(id, RUNNER_ID)) {
+    const who = await currentRunner(id);
+    return { ok: false, error: `Another server is already sending this campaign${who ? ` (${who})` : ''}. Stop it there first — running both would send every message twice.` };
+  }
+
   const ctl = { stop: false, pause: false, note: 'starting', waitingUntil: null };
   running.set(id, ctl);
   await updateCampaign(id, { status: 'running', startedAt: camp.startedAt || Date.now(), lastError: null });
@@ -120,7 +131,10 @@ export async function startCampaign(id) {
       console.error(`[${camp.id}] crashed:`, err);
       await updateCampaign(camp.id, { status: 'paused', lastError: err.message }).catch(() => {});
     })
-    .finally(() => running.delete(id));
+    .finally(async () => {
+      running.delete(id);
+      await releaseCampaign(id, RUNNER_ID).catch(() => {});
+    });
 
   return { ok: true };
 }
@@ -232,6 +246,7 @@ async function loop(camp, ctl) {
         }
       }
 
+      await heartbeat(camp.id, RUNNER_ID);
       if (done % 5 === 0) await updateCampaign(camp.id, { stats: await campaignStats(camp.id) });
 
       // --- pace -----------------------------------------------------------
